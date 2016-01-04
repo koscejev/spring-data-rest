@@ -46,4 +46,11 @@ public @interface Projection {
 	 * @return
 	 */
 	String name() default "";
+
+	/**
+	 * List of sub-type projections that will be automatically used instead of this one,
+	 * when one of their types matches the projected object.
+	 * Each sub-projection must be an interface that extends this annotated projection interface.
+	 */
+	Class<?>[] subProjections() default {};
 }
