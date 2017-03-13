@@ -18,6 +18,7 @@ package org.springframework.data.rest.webmvc.json;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonSerializer;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.SerializerProvider;
 import com.fasterxml.jackson.databind.jsontype.TypeSerializer;
 import com.fasterxml.jackson.databind.ser.std.StdSerializer;
@@ -39,6 +40,7 @@ import java.util.List;
  *
  * @author Oliver Gierke
  * @author Anton Koscejev
+ * @author Juan Manuel de Blas
  * @since 2.5
  */
 public class NestedEntitySerializer extends StdSerializer<Object> {
@@ -72,15 +74,53 @@ public class NestedEntitySerializer extends StdSerializer<Object> {
 
 	@Override
 	public void serialize(Object value, JsonGenerator gen, SerializerProvider provider) throws IOException {
-		getResourceSerializer(provider)
-				.serialize(toResources(value), gen, provider);
+		Object resource = toResources(value);
+		if (resource instanceof Collection) {
+			Collection resourceCollection = (Collection)resource;
+			int length = resourceCollection.size();
+			if (length == 1 && provider.isEnabled(SerializationFeature.WRITE_SINGLE_ELEM_ARRAYS_UNWRAPPED)) {
+				getResourceSerializer(provider).serialize(resource, gen, provider);
+			} else {
+				serializeCollection(resourceCollection, gen, provider);
+			}
+		} else {
+			getResourceSerializer(provider).serialize(resource, gen, provider);
+		}
 	}
 
 	@Override
 	public void serializeWithType(Object value, JsonGenerator gen, SerializerProvider provider, TypeSerializer typeSer)
-			throws IOException {
-		getResourceSerializer(provider)
-				.serializeWithType(toResources(value), gen, provider, typeSer);
+					throws IOException {
+		Object resource = toResources(value);
+		if (resource instanceof Collection) {
+			Collection resourceCollection = (Collection)resource;
+			int length = resourceCollection.size();
+			if (length == 1 && provider.isEnabled(SerializationFeature.WRITE_SINGLE_ELEM_ARRAYS_UNWRAPPED)) {
+				getResourceSerializer(provider).serializeWithType(resource, gen, provider, typeSer);
+			} else {
+				serializeCollectionWithType(resourceCollection, gen, provider, typeSer);
+			}
+		} else {
+			getResourceSerializer(provider).serializeWithType(resource, gen, provider, typeSer);
+		}
+	}
+
+	private void serializeCollection(Collection collection, JsonGenerator gen, SerializerProvider provider) throws IOException {
+		gen.writeStartArray(collection.size());
+		gen.setCurrentValue(collection);
+		for (Object aResourceCollection : collection) {
+			getResourceSerializer(provider).serialize(aResourceCollection, gen, provider);
+		}
+		gen.writeEndArray();
+	}
+
+	private void serializeCollectionWithType(Collection collection, JsonGenerator gen, SerializerProvider provider, TypeSerializer typeSer) throws IOException {
+		typeSer.writeTypePrefixForArray(collection, gen);
+		gen.setCurrentValue(collection);
+		for (Object aResourceCollection : collection) {
+			getResourceSerializer(provider).serializeWithType(aResourceCollection, gen, provider, typeSer);
+		}
+		typeSer.writeTypeSuffixForArray(collection, gen);
 	}
 
 	private Object toResources(Object value) {
